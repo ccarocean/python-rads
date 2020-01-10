@@ -1,8 +1,18 @@
 import pytest  # type: ignore
 
 from rads import get_dataroot, load_config
+from rads.exceptions import InvalidDataroot
 
-if not get_dataroot():
+
+def test_for_dataroot():
+    try:
+        get_dataroot()
+    except InvalidDataroot:
+        return False
+    return True
+
+
+if not test_for_dataroot():
     pytest.skip(
         "skipping integration tests (no RADS dataroot)", allow_module_level=True
     )

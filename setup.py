@@ -31,7 +31,7 @@ checks_require = [
     "pydocstyle",
     "typing-extensions",
 ]
-tests_require = ["pytest", "pytest-cov", "pytest-mock"]
+tests_require = ["pytest", "pytest-cov", "pytest-mock", "pyfakefs"]
 dev_requires = ["black", "isort", "twine"]
 
 if os.environ.get("READTHEDOCS") == "True":

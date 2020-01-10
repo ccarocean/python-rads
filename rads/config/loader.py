@@ -6,6 +6,7 @@ from typing import IO, Any, Callable, Dict, Iterable, Mapping, Optional, TypeVar
 
 from dataclass_builder import MissingFieldError
 
+from ..data.dataroot import Dataroot
 from ..exceptions import ConfigError, InvalidDataroot
 from ..paths import (
     local_config,
@@ -132,8 +133,7 @@ def get_dataroot(
     dataroot: Optional[PathLike] = None,
     *,
     xml_files: Optional[Iterable[PathLikeOrFile]] = None,
-    require: bool = False,
-) -> Optional[Path]:
+) -> Dataroot:
     """Get the RADS dataroot.
 
     The *dataroot* or RADSDATAROOT as it is referred to in the official RADS
@@ -169,9 +169,6 @@ def get_dataroot(
             The ``<dataroot>`` tag is a PyRADS only tag.  Adding it to any
             official RADS configuration file will result in an error if the
             official RADS implementation is used.
-    :param require:
-        If True a :class:`rads.exceptions.InvalidDataroot` error will be raised
-        instead of returning None if the *dataroot* cannot be found.
 
     :return:
         The path to the RADS *dataroot* or None if it cannot be found.
@@ -192,15 +189,11 @@ def get_dataroot(
         for file in _filter_files(xml_files):
             dataroot_value = _load_dataroot(file, dataroot_value)
         if dataroot_value is None:
-            if require:
-                raise InvalidDataroot("cannot find RADS data directory")
-            return None
+            raise InvalidDataroot("cannot find RADS data directory")
         dataroot_ = Path(os.path.expanduser(os.path.expandvars(dataroot_value)))
 
-    # verify the dataroot directory
-    if dataroot_.is_dir() and (dataroot_ / "conf" / "rads.xml").is_file():
-        return dataroot_
-    raise InvalidDataroot(f"'{str(dataroot_)}' is not a RADS data directory")
+    # verify and return the dataroot
+    return Dataroot(dataroot_)
 
 
 def _filter_files(files: Iterable[PathLikeOrFile]) -> Iterable[PathOrFile]:
@@ -357,7 +350,7 @@ def _load_preconfig(
 
     """
     # get dataroot and xml paths
-    dataroot_ = get_dataroot(dataroot, xml_files=xml_files, require=True)
+    dataroot_ = get_dataroot(dataroot, xml_files=xml_files)
     if xml_files is None:
         xml_files = config_files(dataroot_, rads=True, pyrads=True)
 

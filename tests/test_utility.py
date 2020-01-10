@@ -1,6 +1,7 @@
 import io
 from datetime import datetime
 
+import numpy as np  # type: ignore
 import pytest  # type: ignore
 
 from rads.constants import EPOCH
@@ -10,8 +11,11 @@ from rads.utility import (
     delete_sublist,
     ensure_open,
     fortran_float,
+    get,
+    getsorted,
     isio,
     merge_sublist,
+    outliers,
     timestamp_to_datetime,
     xor,
 )
@@ -127,7 +131,7 @@ def test_fortran_float():
         fortran_float("not a float")
 
 
-def test_datetime_to_epoch():
+def test_datetime_to_timestamp():
     epoch = datetime(2000, 1, 1, 0, 0, 0)
     assert datetime_to_timestamp(datetime(2000, 1, 1, 0, 0, 0), epoch=epoch) == 0.0
     assert datetime_to_timestamp(datetime(2000, 1, 1, 0, 0, 1), epoch=epoch) == 1.0
@@ -135,7 +139,7 @@ def test_datetime_to_epoch():
     assert datetime_to_timestamp(datetime(2000, 1, 1, 1, 0, 0), epoch=epoch) == 3600.0
 
 
-def test_datetime_to_epoch_with_default_epoch():
+def test_datetime_to_timestamp_with_default_epoch():
     assert datetime_to_timestamp(
         datetime(2000, 1, 1, 0, 0, 0)
     ) == datetime_to_timestamp(datetime(2000, 1, 1, 0, 0, 0), epoch=EPOCH)
@@ -150,7 +154,7 @@ def test_datetime_to_epoch_with_default_epoch():
     ) == datetime_to_timestamp(datetime(2000, 1, 1, 1, 0, 0), epoch=EPOCH)
 
 
-def test_epoch_to_datetime():
+def test_timestamp_to_datetime():
     epoch = datetime(2000, 1, 1, 0, 0, 0)
     assert timestamp_to_datetime(0.0, epoch=epoch) == datetime(2000, 1, 1, 0, 0, 0)
     assert timestamp_to_datetime(1.0, epoch=epoch) == datetime(2000, 1, 1, 0, 0, 1)
@@ -158,8 +162,122 @@ def test_epoch_to_datetime():
     assert timestamp_to_datetime(3600.0, epoch=epoch) == datetime(2000, 1, 1, 1, 0, 0)
 
 
-def test_epoch_to_datetime_with_default_epoch():
+def test_timestamp_to_datetime_with_default_epoch():
     assert timestamp_to_datetime(0.0) == timestamp_to_datetime(0.0, epoch=EPOCH)
     assert timestamp_to_datetime(1.0) == timestamp_to_datetime(1.0, epoch=EPOCH)
     assert timestamp_to_datetime(60.0) == timestamp_to_datetime(60.0, epoch=EPOCH)
     assert timestamp_to_datetime(3600.0) == timestamp_to_datetime(3600.0, epoch=EPOCH)
+
+
+def test_get_with_dict():
+    dict_ = {"a": 1, "b": 2, "c": 3}
+    assert get(dict_, "a") == 1
+    assert get(dict_, "b") == 2
+    assert get(dict_, "c") == 3
+    assert get(dict_, "d") is None
+
+
+def test_get_with_dict_and_custom_default():
+    dict_ = {"a": 1, "b": 2, "c": 3}
+    assert get(dict_, "a", 10) == 1
+    assert get(dict_, "b", 10) == 2
+    assert get(dict_, "c", 10) == 3
+    assert get(dict_, "d", 10) == 10
+    assert get(dict_, "d", "not found") == "not found"
+
+
+def test_get_with_list():
+    list_ = ["a", "b", "c"]
+    assert get(list_, 0) == "a"
+    assert get(list_, 1) == "b"
+    assert get(list_, 2) == "c"
+    assert get(list_, 3) is None
+
+
+def test_get_with_list_and_custom_default():
+    list_ = ["a", "b", "c"]
+    assert get(list_, 0) == "a"
+    assert get(list_, 1) == "b"
+    assert get(list_, 2) == "c"
+    assert get(list_, 3, 10) == 10
+    assert get(list_, 3, "not found") == "not found"
+
+
+def test_getsorted_with_scalar_value():
+    array = np.array([1, 2, 4, 5, 7])
+    n = len(array)
+    assert getsorted(array, 0) == n
+    assert getsorted(array, 1) == 0
+    assert getsorted(array, 2) == 1
+    assert getsorted(array, 3) == n
+    assert getsorted(array, 4) == 2
+    assert getsorted(array, 5) == 3
+    assert getsorted(array, 6) == n
+    assert getsorted(array, 7) == 4
+    assert getsorted(array, 8) == n
+    assert getsorted(array, 9) == n
+
+
+def test_getsorted_with_vector_value():
+    array = np.array([1, 2, 4, 5, 7])
+    n = len(array)
+    np.testing.assert_equal(
+        getsorted(array, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]),
+        np.array([n, 0, 1, n, 2, 3, n, 4, n, n]),
+    )
+
+
+def test_getsorted_with_vector_value_and_valid_only():
+    array = np.array([1, 2, 4, 5, 7])
+    np.testing.assert_equal(
+        getsorted(array, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], valid_only=True),
+        np.array([0, 1, 2, 3, 4]),
+    )
+
+
+def test_getsorted_with_scalar_value_and_sorter():
+    array = np.array([2, 7, 1, 5, 4])
+    sorter = np.argsort(array)
+    n = len(array)
+    assert getsorted(array, 0, sorter=sorter) == n
+    assert getsorted(array, 1, sorter=sorter) == 2
+    assert getsorted(array, 2, sorter=sorter) == 0
+    assert getsorted(array, 3, sorter=sorter) == n
+    assert getsorted(array, 4, sorter=sorter) == 4
+    assert getsorted(array, 5, sorter=sorter) == 3
+    assert getsorted(array, 6, sorter=sorter) == n
+    assert getsorted(array, 7, sorter=sorter) == 1
+    assert getsorted(array, 8, sorter=sorter) == n
+    assert getsorted(array, 9, sorter=sorter) == n
+
+
+def test_getsorted_with_vector_value_and_sorter():
+    array = np.array([2, 7, 1, 5, 4])
+    sorter = np.argsort(array)
+    n = len(array)
+    np.testing.assert_equal(
+        getsorted(array, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], sorter=sorter),
+        np.array([n, 2, 0, n, 4, 3, n, 1, n, n]),
+    )
+
+
+def test_getsorted_with_vector_value_and_valid_only_and_sorter():
+    array = np.array([2, 7, 1, 5, 4])
+    sorter = np.argsort(array)
+    np.testing.assert_equal(
+        getsorted(
+            array, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], valid_only=True, sorter=sorter
+        ),
+        np.array([2, 0, 4, 3, 1]),
+    )
+
+
+def test_outliers():
+    data = np.array([3, 30, 45, 50, 48, 52, 55, 70, 98])
+    np.testing.assert_equal(
+        outliers(data), [True, False, False, False, False, False, False, False, True]
+    )
+    np.testing.assert_equal(
+        outliers(data, zscore_limit=1.0),
+        [True, True, False, False, False, False, False, True, True],
+    )

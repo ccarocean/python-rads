@@ -1,4 +1,5 @@
 """RADS XML file parser expression grammar."""
+from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Optional, Sequence, Tuple
 
 import fortran_format_converter as ffc
@@ -604,6 +605,7 @@ def satellite_grammar() -> Parser:
         | variable_overrides()
         # PyRADS specific tags
         | ignore("dataroot")
+        | ignore("cache")
         | ignore("blacklist")
     )
     return root_block
@@ -624,6 +626,7 @@ def pre_config_grammar() -> Parser:
     root_block = block(
         satellite_ids()
         | value(list_of(lift(str)), "blacklist")
+        | value(lift(lambda x: Path(x).resolve()), "cache")
         | ignore()  # ignore everything else
     )
     return root_block

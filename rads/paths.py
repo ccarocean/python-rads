@@ -120,3 +120,16 @@ def local_config() -> Path:
         Path to the local RADS configuration file.
     """
     return Path("pyrads.xml")
+
+
+# Cache path
+################################################################################
+
+
+def cache() -> Path:
+    """Path to cache directory.
+
+    :return:
+        Path to the PyRADS cache directory.
+    """
+    return Path(_APPDIRS.user_cache_dir)

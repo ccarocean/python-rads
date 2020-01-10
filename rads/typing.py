@@ -5,13 +5,7 @@ from typing import IO, TYPE_CHECKING, Any, Union
 
 import numpy as np  # type: ignore
 
-__all__ = [
-    "PathLike",
-    "PathLikeOrFile",
-    "PathOrFile",
-    "IntOrArray",
-    "FloatOrArray",
-]
+__all__ = ["PathLike", "PathLikeOrFile", "PathOrFile", "IntOrArray", "FloatOrArray"]
 
 if TYPE_CHECKING:
     PathLike = Union[str, os.PathLike[str]]

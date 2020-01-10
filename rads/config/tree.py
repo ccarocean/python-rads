@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from numbers import Integral
+from pathlib import Path
 from textwrap import indent
 from typing import (
     Any,
@@ -25,8 +26,13 @@ from typing import (
 import numpy as np  # type: ignore
 from cf_units import Unit  # type: ignore
 
+from ..data.dataroot import Dataroot
+from ..paths import cache
 from ..rpn import CompleteExpression
-from ..typing import FloatOrArray, IntOrArray, PathLike, PathLikeOrFile
+from ..typing import FloatOrArray, IntOrArray, PathLikeOrFile
+
+# avoid flake8 error, should not be required
+_cache = cache
 
 __all__ = [
     "PreConfig",
@@ -62,8 +68,8 @@ class PreConfig:
     configurations are loaded.
     """
 
-    dataroot: PathLike
-    """The location of the RADS data root."""
+    dataroot: Dataroot
+    """PyRADS data root object."""
     config_files: Sequence[PathLikeOrFile]
     """
     XML configuration files used to load this pre-config. Also the XML files to
@@ -79,6 +85,8 @@ class PreConfig:
     A collection of 2 character satellite ID strings giving the satellites
     that should not be loaded regardless of the value of `satellites`.
     """
+    cache: Path = field(default_factory=_cache)
+    """Path to cache directory."""
 
 
 @dataclass
@@ -756,8 +764,10 @@ class Satellite:
 class Config:
     """**dataclass**: PyRADS configuration."""
 
-    dataroot: PathLike
-    """Path to the RADS data root."""
+    dataroot: Dataroot
+    """PyRADS data root object."""
+    cache: Path
+    """Path to cache directory."""
     config_files: Sequence[PathLikeOrFile]
     """Paths to the XML configuration files used to load this configuration.
 
@@ -779,11 +789,16 @@ class Config:
             descriptor objects.
         """
         self.dataroot = pre_config.dataroot
+        self.cache = pre_config.cache
         self.config_files = pre_config.config_files[:]
         self.satellites = satellites
 
     def __str__(self) -> str:
-        strings = [f"dataroot: {self.dataroot}", "config_files:"]
+        strings = [
+            f"dataroot: {self.dataroot}",
+            f"cache: {self.cache}",
+            "config_files:",
+        ]
         for file in self.config_files:
             strings.append(_INDENT + str(file))
         strings.append(f"satellites: {' '.join(self.satellites)}")
@@ -798,7 +813,11 @@ class Config:
         :return:
             Human readable string representation of the PyRADS configuration.
         """
-        strings = [f"dataroot: {self.dataroot}", f"config_files:"]
+        strings = [
+            f"dataroot: {self.dataroot}",
+            f"cache: {self.cache}",
+            "config_files:",
+        ]
         for file in self.config_files:
             strings.append(_INDENT + str(file))
         for satellite in self.satellites.values():

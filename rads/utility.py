@@ -3,8 +3,19 @@
 import datetime
 import io
 import os
-from typing import IO, Any, List, Optional, Union, cast
+from typing import (
+    IO,
+    TYPE_CHECKING,
+    Any,
+    List,
+    Optional,
+    TypeVar,
+    Union,
+    cast,
+    overload,
+)
 
+import numpy as np  # type: ignore
 from wrapt import ObjectProxy  # type: ignore
 
 from .constants import EPOCH
@@ -21,6 +32,9 @@ __all__ = [
     "fortran_float",
     "datetime_to_timestamp",
     "timestamp_to_datetime",
+    "get",
+    "getsorted",
+    "outliers",
 ]
 
 
@@ -325,3 +339,144 @@ def timestamp_to_datetime(
         Date and time corresponding to the given `seconds` since the `epoch`.
     """
     return epoch + datetime.timedelta(seconds=seconds)
+
+
+# type variables used with get below
+_K = TypeVar("_K", contravariant=True)
+_V = TypeVar("_V", covariant=True)
+_D = TypeVar("_D")
+
+if TYPE_CHECKING:
+    from typing_extensions import Protocol
+
+    class SupportsGetItem(Protocol[_K, _V]):
+        def __getitem__(self, item: _K) -> _V:
+            pass
+
+
+@overload
+def get(
+    obj: "SupportsGetItem[_K, _V]", item: _K, default: _D
+) -> Union[_V, _D]:  # noqa: D103
+    pass
+
+
+@overload
+def get(obj: "SupportsGetItem[_K, _V]", item: _K) -> Union[_V, None]:  # noqa: D103
+    pass
+
+
+def get(
+    obj: "SupportsGetItem[_K, _V]", item: _K, default: Optional[_D] = None
+) -> Union[_V, Optional[_D]]:
+    """Return value of `item` if found, otherwise returns the `default`.
+
+    Extends dict.get to any type supporting :func:`__getitem__`.
+
+    :param obj:
+        An object supporting :func:`__getitem__`.  It should raise
+        :class:`IndexError` or :class:`KeyError` if the index/key is outside
+        of the valid range or does not exist.
+    :param item:
+        Index or key to get from the container.
+    :param default:
+        The default value when the `item` does not exist.  Defaults to `None`.
+
+    :return:
+        The value associated with the given index/key.
+    """
+    try:
+        return obj[item]
+    except (IndexError, KeyError):
+        return default
+
+
+def getsorted(
+    array: np.ndarray,
+    value: Any,
+    *,
+    sorter: Optional[np.ndarray] = None,
+    valid_only: bool = False,
+) -> Union[np.ndarray, int]:
+    """Get index of value in array.
+
+    This is similar to :func:`numpy.searchsorted` but is focused on looking up
+    a value in a sorted array instead of inserting into it.
+
+    :param array:
+        Sorted 1D array to find value in.
+    :param value:
+        Value or array of values to search for.
+    :param sorter:
+        Optional array of integer indices that sort the array into ascending
+        order.  It is typically the result of :func:`numpy.argsort`.
+    :param valid_only:
+        Set to True to only return valid indices, the returned array may no
+        longer be the same shape as `value`.  Ignored when value is a scalar.
+
+    :return:
+        Index or indices of the `value` or values in the given `array`.
+        `N`, where N is the length of `array`, is returned if value cannot be
+        found.
+    """
+    # search with bisection for a theoretical insertion location
+    indices = np.searchsorted(array, value, sorter=sorter)
+
+    if sorter is None:
+        # scalar - invalidate if the given value is not found
+        if np.isscalar(value):
+            if indices < len(array) and array[indices] == value:
+                return indices
+            return len(array)
+
+        # array - invalidate locations where the given value is not found
+        valid = indices < len(array)
+        value = np.asarray(value)
+        valid[valid] = array[indices[valid]] == value[valid]
+        indices[~valid] = len(array)
+        if valid_only:
+            return indices[valid]
+        return indices
+
+    # scalar - invalidate if the given value is not found
+    if np.isscalar(value):
+        if indices < len(array) and array[sorter[indices]] == value:
+            return sorter[indices]
+        return len(array)
+
+    # array - invalidate locations where the given value is not found
+    valid = indices < len(array)
+    value = np.asarray(value)
+    valid[valid] = array[sorter[indices[valid]]] == value[valid]
+    indices[~valid] = len(array)
+    if valid_only:
+        return sorter[indices[valid]]
+    result = len(array) * np.ones(indices.size)
+    result[valid] = sorter[indices[valid]]
+    return result
+
+
+def outliers(data: np.ndarray, zscore_limit: float = 3.5) -> np.ndarray:
+    """Detect outliers.
+
+    Based the modified Z-value method at:
+        https://www.itl.nist.gov/div898/handbook/eda/section3/eda35h.htm
+
+    Upstream reference:
+         Boris Iglewicz and David Hoaglin (1993), "Volume 16: How to Detect and
+         Handle Outliers", The ASQC Basic References in Quality Control:
+         Statistical Techniques, Edward F. Mykytka, Ph.D., Editor.
+
+    :param data:
+        Data to detect outliers in.
+    :param zscore_limit:
+        Z-score limit, defaults to 3.5 which is recommended by Iglewicz and Hoaglin.
+
+    :return:
+        Boolean array giving location of outliers in `data`.
+    """
+    median = np.median(data)
+    median_absolute_deviation = np.median(np.abs(data - median))
+    if median_absolute_deviation == 0:
+        return np.zeros(data.shape, dtype=bool)
+    return np.abs(0.6745 * (data - median) / median_absolute_deviation) > zscore_limit
